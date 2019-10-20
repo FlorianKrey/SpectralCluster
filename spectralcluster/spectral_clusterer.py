@@ -4,9 +4,10 @@ from __future__ import print_function
 
 import numpy as np
 from sklearn.cluster import KMeans
-from spectralcluster import refinement
-from spectralcluster import utils
-
+#from spectralcluster import refinement
+#from spectralcluster import utils
+from . import refinement
+from . import utils
 
 DEFAULT_REFINEMENT_SEQUENCE = [
     "CropDiagonal",
