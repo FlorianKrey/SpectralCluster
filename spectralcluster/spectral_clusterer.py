@@ -8,6 +8,7 @@ from sklearn.cluster import KMeans
 #from spectralcluster import utils
 from . import refinement
 from . import utils
+from . import custom_distance_kmeans
 
 DEFAULT_REFINEMENT_SEQUENCE = [
     "CropDiagonal",
@@ -28,6 +29,8 @@ class SpectralClusterer(object):
             p_percentile=0.95,
             thresholding_soft_multiplier=0.01,
             stop_eigenvalue=1e-2,
+            custom_dist=None,
+            custom_dist_maxiter=(2, 10),
             refinement_sequence=DEFAULT_REFINEMENT_SEQUENCE):
         """Constructor of the clusterer.
 
@@ -44,6 +47,11 @@ class SpectralClusterer(object):
             stop_eigenvalue: when computing the number of clusters using
                 Eigen Gap, we do not look at eigen values smaller than this
                 value
+            custom_dist: custome distance for KMeans e.g. cosine. Any distance
+                of scipy.spatial.distance can be used
+            custom_dist_maxiter: int or tuple,
+                if int then number of iterations
+                if tuple then tuple[0] is number of KMeans++ iterations
             refinement_sequence: a list of strings for the sequence of
                 refinement operations to apply on the affinity matrix
         """
@@ -53,6 +61,15 @@ class SpectralClusterer(object):
         self.p_percentile = p_percentile
         self.thresholding_soft_multiplier = thresholding_soft_multiplier
         self.stop_eigenvalue = stop_eigenvalue
+        self.custom_dist = custom_dist
+        if isinstance(custom_dist_maxiter, int):
+            self.custom_dist_maxiter = (0, custom_dist_maxiter)
+        elif isinstance(custom_dist_maxiter, tuple):
+            self.custom_dist_maxiter = custom_dist_maxiter
+        else:
+            raise ValueError(
+                "custom_dist_maxiter has to be either int or tuple,"
+                "received type=%s" % str(type(custom_dist_maxiter)))
         self.refinement_sequence = refinement_sequence
 
     def _get_refinement_operator(self, name):
@@ -121,15 +138,31 @@ class SpectralClusterer(object):
         # Get spectral embeddings.
         spectral_embeddings = eigenvectors[:, :k]
 
-        # Run K-Means++ on spectral embeddings.
-        # Note: The correct way should be using a K-Means implementation
-        # that supports customized distance measure such as cosine distance.
-        # This implemention from scikit-learn does NOT, which is inconsistent
-        # with the paper.
-        kmeans_clusterer = KMeans(
-            n_clusters=k,
-            init="k-means++",
-            max_iter=300,
-            random_state=0)
+        # Run K-Means
+        # Using custom_dist a custom distance measure can be used
+        # Setting custom_dist=cosine is consistent with the paper
+        # For custom_dist=None KMeans++ algorithm is used
+        if self.custom_dist is None:
+            kmeans_clusterer = KMeans(
+                n_clusters=k,
+                init="k-means++",
+                max_iter=300,
+                random_state=0)
+        else:
+            if self.custom_dist_maxiter[0] > 0:
+                kmeans_clusterer = KMeans(
+                    n_clusters=k,
+                    init="k-means++",
+                    max_iter=self.custom_dist_maxiter[0],
+                    random_state=0)
+                kmeans_clusterer.fit(spectral_embeddings)
+                init = kmeans_clusterer.cluster_centers_
+            else:
+                init = None
+            kmeans_clusterer = custom_distance_kmeans.CustKmeans(
+                n_clusters=k,
+                init=init,
+                max_iter=self.custom_dist_maxiter[1],
+                custom_dist=self.custom_dist)
         labels = kmeans_clusterer.fit_predict(spectral_embeddings)
         return labels

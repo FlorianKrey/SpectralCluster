@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # author: Florian Kreyssig flk24@cam.ac.uk
-
+# Some of this code was taken from https://stackoverflow.com/a/5551499
 """
     Class CustKMeans performs KMeans clustering
     Any distance measure from scipy.spatial.distance can be used
@@ -67,7 +67,7 @@ def k_means(X, n_clusters, init=None, tol=.001,
     sample_ids = np.arange(n_samples)
     prev_mean_dist = 0
     for iter_idx in range(1, max_iter+1):
-        dist_to_all_centres = cdist(X, centres, custom_dist=custom_dist, p=p)
+        dist_to_all_centres = cdist(X, centres, metric=custom_dist, p=p)
         labels = dist_to_all_centres.argmin(axis=1)
         distances = dist_to_all_centres[sample_ids, labels]
         mean_distance = np.mean(distances)
@@ -77,7 +77,7 @@ def k_means(X, n_clusters, init=None, tol=.001,
         prev_mean_dist = mean_distance
         for each_center in range(n_centres):
             each_center_samples = np.where(labels == each_center)[0]
-            if each_center_samples:
+            if each_center_samples.any():
                 centres[each_center] = np.mean(X[each_center_samples], axis=0)
     return centres, labels, distances
 
@@ -98,5 +98,5 @@ class CustKmeans:
 
     def fit_predict(self, X):
         """Compute cluster centers and predict cluster index for each sample."""
-        return k_means(X, n_clusters=self.n_clusters, init=self.init,
+        return k_means(X, self.n_clusters, init=self.init,
                        max_iter=self.max_iter, custom_dist=self.custom_dist)[1]
